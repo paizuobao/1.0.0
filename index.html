@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能座位安排系统</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- SheetJS库用于Excel文件处理 -->
+    <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- html2canvas库用于截图导出 -->
+    <script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+</head>
+<body>
+    <!-- 头部工具栏 -->
+    <header class="header">
+        <div class="header-left">
+            <h1>智能座位安排系统</h1>
+        </div>
+        <div class="header-center">
+            <button id="randomSeat" class="btn btn-primary">随机排座</button>
+            <button id="undoBtn" class="btn btn-secondary" disabled>↶ 撤销</button>
+            <button id="clearSeats" class="btn btn-secondary">清空座位</button>
+            <button id="saveLayout" class="btn btn-success">保存方案</button>
+            <button id="exportLayout" class="btn btn-info">导出图片</button>
+            <button id="clearAllStudents" class="btn btn-danger">🗑️ 清空</button>
+        </div>
+        <div class="header-right">
+            <button id="seatingSettingsBtn" class="btn btn-outline">排座设置</button>
+        </div>
+    </header>
+
+    <!-- 主要内容区 -->
+    <main class="main-container">
+        <!-- 左侧学生管理区 -->
+        <aside class="sidebar-left">
+            <div class="panel">
+                <div class="panel-header">
+                    <h3 class="panel-title">学生管理</h3>
+                </div>
+                <div class="panel-actions">
+                    <button id="addStudent" class="btn btn-small btn-primary">+ 添加</button>
+                    <button id="importExcel" class="btn btn-small btn-success">📊 导入Excel</button>
+                    <button id="downloadTemplate" class="btn btn-small btn-info">📄 模板</button>
+                </div>
+                <div class="student-controls">
+                    <input type="text" id="searchStudent" placeholder="搜索学生..." class="input-field">
+                    <select id="filterStudents" class="select-field">
+                        <option value="all">全部学生</option>
+                        <option value="seated">已安排</option>
+                        <option value="unseated" selected>未安排</option>
+                    </select>
+                </div>
+                <div class="student-list" id="studentList">
+                    <!-- 学生列表将由JavaScript动态生成 -->
+                </div>
+                <div class="student-stats">
+                    <div class="stat">
+                        <span class="stat-label">总人数:</span>
+                        <span id="totalStudents" class="stat-value">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">已安排:</span>
+                        <span id="seatedStudents" class="stat-value">0</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 中央座位显示区 -->
+        <section class="main-content">
+            <div class="classroom-container">
+                <div class="classroom-header">
+                    <h3>教室座位图</h3>
+                    <div class="classroom-controls">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="showCoordinatesMain" checked>
+                            <label for="showCoordinatesMain">显示坐标</label>
+                        </div>
+                    </div>
+                    <div class="classroom-info">
+                        <span id="classroomSize">8行 × 6列</span>
+                        <span class="separator">|</span>
+                        <span id="occupancyRate">占用率: 0%</span>
+                    </div>
+                </div>
+                <div class="classroom-grid" id="classroomGrid">
+                    <!-- 座位网格将由JavaScript动态生成 -->
+                </div>
+                <div class="classroom-legend">
+                    <div class="legend-item">
+                        <div class="seat-demo seat-empty"></div>
+                        <span>空座位</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="seat-demo seat-occupied"></div>
+                        <span>已安排</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="seat-demo seat-selected"></div>
+                        <span>已选中</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- 模态框 -->
+    <div id="studentModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">添加学生</h3>
+                <span class="modal-close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="studentForm">
+                    <div class="form-group">
+                        <label for="studentName">姓名:</label>
+                        <input type="text" id="studentName" class="input-field" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="studentId">学号:</label>
+                        <input type="text" id="studentId" class="input-field">
+                    </div>
+                    <div class="form-group">
+                        <label for="studentHeight">身高(cm):</label>
+                        <input type="number" id="studentHeight" class="input-field" min="100" max="200">
+                    </div>
+                    <div class="form-group">
+                        <label for="studentGender">性别:</label>
+                        <select id="studentGender" class="select-field">
+                            <option value="">请选择</option>
+                            <option value="male">男</option>
+                            <option value="female">女</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="studentVision">
+                            视力不佳(需要坐前排)
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="studentNotes">备注:</label>
+                        <textarea id="studentNotes" class="input-field" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="cancelStudent" class="btn btn-secondary">取消</button>
+                <button type="submit" id="saveStudent" class="btn btn-primary">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Excel导入预览模态框 -->
+    <div id="excelPreviewModal" class="modal" style="display: none;">
+        <div class="modal-content excel-preview-modal">
+            <div class="modal-header">
+                <h3>Excel导入预览</h3>
+                <span class="modal-close" onclick="app.hideExcelPreviewModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="import-info">
+                    <div class="import-stats">
+                        <span>共读取到 <strong id="totalImportCount">0</strong> 条记录</span>
+                        <span class="separator">|</span>
+                        <span>有效记录 <strong id="validImportCount">0</strong> 条</span>
+                        <span class="separator">|</span>
+                        <span class="error-count">错误记录 <strong id="errorImportCount">0</strong> 条</span>
+                    </div>
+                </div>
+                <div class="import-preview">
+                    <div class="preview-tabs">
+                        <button class="tab-btn active" data-tab="valid">有效数据</button>
+                        <button class="tab-btn" data-tab="errors">错误数据</button>
+                    </div>
+                    <div class="preview-content">
+                        <div id="validDataPreview" class="tab-content active">
+                            <div class="data-table-container">
+                                <table class="data-table" id="validDataTable">
+                                    <thead>
+                                        <tr>
+                                            <th>姓名</th>
+                                            <th>学号</th>
+                                            <th>性别</th>
+                                            <th>视力</th>
+                                            <th>备注</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="validDataBody">
+                                        <!-- 有效数据将在这里显示 -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div id="errorsDataPreview" class="tab-content">
+                            <div class="error-list" id="errorsList">
+                                <!-- 错误信息将在这里显示 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="import-options">
+                    <label class="checkbox-group">
+                        <input type="checkbox" id="overwriteExisting" checked>
+                        <span>覆盖同名学生信息</span>
+                    </label>
+                    <label class="checkbox-group">
+                        <input type="checkbox" id="skipInvalid" checked>
+                        <span>跳过无效记录</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="cancelImport" class="btn btn-secondary">取消</button>
+                <button type="button" id="confirmImport" class="btn btn-primary">确认导入</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 排座设置模态框 -->
+    <div id="seatingSettingsModal" class="modal seating-settings-modal" style="display: none;">
+        <div class="modal-content seating-settings-content">
+            <div class="modal-header">
+                <h3>排座设置</h3>
+                <span class="modal-close" onclick="app.hideSeatingSettingsModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label>教室布局</label>
+                    <div class="layout-controls">
+                        <div class="input-group">
+                            <label for="rowCount">行数:</label>
+                            <input type="number" id="rowCount" value="8" min="1" max="15" class="input-small">
+                        </div>
+                        <div class="input-group">
+                            <label for="colCount">列数:</label>
+                            <input type="number" id="colCount" value="6" min="1" max="12" class="input-small">
+                        </div>
+                        <button id="applyLayout" class="btn btn-small btn-primary">应用布局</button>
+                    </div>
+                </div>
+                
+                <div class="setting-group">
+                    <label>排座规则</label>
+                    <div class="rule-options">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="heightRule" checked>
+                            <label for="heightRule">高矮搭配</label>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="visionRule" checked>
+                            <label for="visionRule">视力优先前排</label>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="genderRule">
+                            <label for="genderRule">男女搭配</label>
+                        </div>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="friendRule">
+                            <label for="friendRule">避免好友邻座</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <label>约束条件</label>
+                    <div class="constraint-list" id="constraintList">
+                        <!-- 约束条件将由JavaScript动态生成 -->
+                    </div>
+                    <div class="constraint-input-group">
+                        <input type="text" id="constraintInput" placeholder="例如：张三不能坐第一排" class="input-field" style="flex: 1;">
+                        <button id="addConstraint" class="btn btn-small btn-primary" style="margin-left: 0.5rem;">添加</button>
+                    </div>
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="closeSeatingSettings" class="btn btn-secondary">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 隐藏的文件上传input -->
+    <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;">
+
+    <!-- JavaScript文件 -->
+    <script src="app.js"></script>
+</body>
+</html>
